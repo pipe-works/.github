@@ -134,7 +134,7 @@ jobs:
         cache: pip
 
     - name: Free up disk space (ML models)
-      if: ${{ inputs.requires-models }}
+      if: ${{ inputs.requires-models == true }}
       run: |
         # Remove unnecessary software to free up ~10GB for ML model testing
         sudo rm -rf /usr/share/dotnet
@@ -171,8 +171,8 @@ jobs:
         eval $PYTEST_CMD
       env:
         # Prevent accidental model downloads in ML projects
-        PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models && '/tmp/models' || '' }}
-        HF_HUB_OFFLINE: ${{ inputs.requires-models && '1' || '0' }}
+        PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models == true && '/tmp/models' || '/dev/null' }}
+        HF_HUB_OFFLINE: ${{ inputs.requires-models == true && '1' || '0' }}
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == inputs.python-version
