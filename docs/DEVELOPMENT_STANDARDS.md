@@ -9,6 +9,7 @@ This document defines the development standards, tooling, and best practices for
 - [Python Version](#python-version)
 - [Code Quality Tools](#code-quality-tools)
 - [Testing Standards](#testing-standards)
+  - [ML/Model Testing](#mlmodel-testing)
 - [CI/CD](#cicd)
 - [Pre-commit Hooks](#pre-commit-hooks)
 - [Documentation](#documentation)
@@ -140,6 +141,125 @@ tests/
 ├── conftest.py        # Shared fixtures
 └── README.md          # Test documentation
 ```
+
+### ML/Model Testing
+
+For projects using machine learning models (PyTorch, Diffusers, Transformers), special considerations apply:
+
+#### Test Markers
+
+Use pytest markers to categorize tests by resource requirements:
+
+```toml
+[tool.pytest.ini_options]
+markers = [
+    "slow: Tests that take >5 seconds (deselect with '-m \"not slow\"')",
+    "requires_model: Tests requiring ML model downloads (deselect with '-m \"not requires_model\"')",
+    "integration: Integration tests requiring external resources",
+    "unit: Fast unit tests (default)",
+]
+```
+
+**Usage**:
+
+```python
+import pytest
+
+@pytest.mark.requires_model
+def test_model_inference():
+    # Test that requires downloading a model
+    pass
+
+@pytest.mark.slow
+def test_large_batch_processing():
+    # Test that takes >5 seconds
+    pass
+
+# Fast tests (no marker needed)
+def test_validation_logic():
+    # Quick unit test
+    pass
+```
+
+#### CI Configuration for ML Projects
+
+Use the reusable workflow with ML-specific parameters:
+
+```yaml
+jobs:
+  ci:
+    uses: pipe-works/.github/.github/workflows/reusable-python-ci.yml@main
+    with:
+      python-version: '3.12'
+      coverage-threshold: 50
+      requires-models: true                           # Enable disk cleanup
+      pytest-markers: 'not requires_model and not slow'  # Skip expensive tests
+    secrets: inherit
+```
+
+**What `requires-models: true` does**:
+
+- Frees up ~10GB disk space (removes dotnet, ghc, boost, agent tools)
+- Uses `pip install --no-cache-dir` to save space
+- Sets `HF_HUB_OFFLINE=1` to prevent accidental model downloads
+- Sets `PIPEWORKS_MODELS_DIR=/tmp/models` for isolation
+
+#### Local Development
+
+**Install test dependencies**:
+```bash
+pip install -e ".[dev]"
+```
+
+**Run fast tests only** (pre-commit):
+```bash
+pytest -m "not requires_model and not slow"
+```
+
+**Run all tests** (before PR):
+```bash
+pytest  # Runs everything including model tests
+```
+
+**Run specific marker**:
+```bash
+pytest -m requires_model  # Only model tests
+pytest -m slow            # Only slow tests
+```
+
+#### Best Practices
+
+1. **Keep model downloads optional**: Tests should work without internet access
+2. **Use small test models**: If testing model code, use tiny/test model variants
+3. **Mock model outputs**: For testing logic around models, mock the inference
+4. **Separate concerns**:
+   - `unit/` - Logic tests (fast, no models)
+   - `integration/` - Model integration tests (slow, requires downloads)
+
+**Example test organization**:
+
+```
+tests/
+├── unit/
+│   ├── test_validation.py      # No marker (fast)
+│   ├── test_config.py          # No marker (fast)
+│   └── test_prompts.py         # No marker (fast)
+├── integration/
+│   ├── test_model_loading.py   # @pytest.mark.requires_model
+│   └── test_inference.py       # @pytest.mark.requires_model @pytest.mark.slow
+└── conftest.py
+```
+
+#### GitHub Actions Disk Space
+
+ML dependencies (PyTorch, Diffusers) are large. Standard GitHub runners have ~14GB free space. After removing unnecessary software, you gain ~10GB more.
+
+**If tests still fail due to disk space**:
+
+1. Check if all model downloads are marked with `@pytest.mark.requires_model`
+2. Verify `HF_HUB_OFFLINE=1` is preventing downloads
+3. Consider using `ubuntu-latest-large` runners (requires paid plan)
+4. Use `--no-cache-dir` for pip installs in CI
 
 ---
 

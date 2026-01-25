@@ -3,6 +3,7 @@
 #
 # Usage in your repo's .github/workflows/ci.yml:
 #
+# Standard Python project:
 # jobs:
 #   ci:
 #     uses: pipe-works/.github/.github/workflows/reusable-python-ci.yml@main
@@ -11,6 +12,17 @@
 #       coverage-threshold: 50
 #       run-security: true
 #       run-docs: true
+#     secrets: inherit
+#
+# ML/Model project (requires disk cleanup and test markers):
+# jobs:
+#   ci:
+#     uses: pipe-works/.github/.github/workflows/reusable-python-ci.yml@main
+#     with:
+#       python-version: '3.12'
+#       coverage-threshold: 50
+#       requires-models: true
+#       pytest-markers: 'not requires_model and not slow'
 #     secrets: inherit
 
 name: Reusable Python CI
@@ -48,6 +60,21 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      requires-models:
+        description: 'Enable ML model testing support (disk cleanup, offline mode, custom markers)'
+        required: false
+        type: boolean
+        default: false
+      pytest-markers:
+        description: 'Pytest marker expression (e.g. "not requires_model and not slow")'
+        required: false
+        type: string
+        default: ''
+      pytest-args:
+        description: 'Additional pytest arguments (appended to default args)'
+        required: false
+        type: string
+        default: ''
     secrets:
       CODECOV_TOKEN:
         required: true
@@ -106,14 +133,46 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: pip
 
+    - name: Free up disk space (ML models)
+      if: ${{ inputs.requires-models }}
+      run: |
+        # Remove unnecessary software to free up ~10GB for ML model testing
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        # Use --no-cache-dir for ML projects to save disk space
+        if [ "${{ inputs.requires-models }}" == "true" ]; then
+          pip install --no-cache-dir -e ".[dev]"
+        else
+          pip install -e ".[dev]"
+        fi
 
     - name: Run tests with pytest
       run: |
-        pytest -v --cov --cov-report=xml --cov-report=term --cov-fail-under=${{ inputs.coverage-threshold }}
+        # Build pytest command with optional markers and args
+        PYTEST_CMD="pytest -v --cov --cov-report=xml --cov-report=term --cov-fail-under=${{ inputs.coverage-threshold }}"
+
+        # Add marker expression if provided
+        if [ -n "${{ inputs.pytest-markers }}" ]; then
+          PYTEST_CMD="$PYTEST_CMD -m '${{ inputs.pytest-markers }}'"
+        fi
+
+        # Add additional args if provided
+        if [ -n "${{ inputs.pytest-args }}" ]; then
+          PYTEST_CMD="$PYTEST_CMD ${{ inputs.pytest-args }}"
+        fi
+
+        eval $PYTEST_CMD
+      env:
+        # Prevent accidental model downloads in ML projects
+        PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models && '/tmp/models' || '' }}
+        HF_HUB_OFFLINE: ${{ inputs.requires-models && '1' || '0' }}
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == inputs.python-version

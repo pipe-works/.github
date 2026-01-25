@@ -71,6 +71,14 @@ addopts = """
 # For async tests (if needed)
 asyncio_mode = "auto"
 
+# Standard test markers for organizing test suites
+markers = [
+    "slow: Tests that take >5 seconds (deselect with '-m \"not slow\"')",
+    "requires_model: Tests requiring ML model downloads (deselect with '-m \"not requires_model\"')",
+    "integration: Integration tests requiring external resources",
+    "unit: Fast unit tests (default)",
+]
+
 # =============================================================================
 # Mypy Configuration (REQUIRED)
 # =============================================================================
