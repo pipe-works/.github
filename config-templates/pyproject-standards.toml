@@ -1,0 +1,118 @@
+# Standard pyproject.toml configuration for pipe-works organization
+# Copy these sections into your project's pyproject.toml and customize as needed
+
+# =============================================================================
+# Development Dependencies (REQUIRED)
+# =============================================================================
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",  # If using async code
+
+    # Code quality (PINNED VERSIONS for consistency)
+    "black==26.1.0",           # IMPORTANT: Pinned org-wide
+    "ruff>=0.14.0",
+    "mypy>=1.19.0",
+    "pre-commit>=4.5.0",
+
+    # Security
+    "bandit[toml]>=1.7.0",
+]
+
+# Documentation dependencies (if using Sphinx/ReadTheDocs)
+docs = [
+    "sphinx>=8.0,<9.0",
+    "sphinx-rtd-theme>=3.0",
+    "sphinx-autodoc-typehints>=3.5",
+    "myst-parser>=4.0",
+]
+
+# =============================================================================
+# Black Configuration (REQUIRED)
+# =============================================================================
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+# =============================================================================
+# Ruff Configuration (REQUIRED)
+# =============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+# Relax rules for test files
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "N806",  # Allow MockClass naming in tests
+    "F841",  # Allow unused variables in tests
+]
+
+# =============================================================================
+# Pytest Configuration (REQUIRED)
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+addopts = """
+    --cov
+    --cov-report=html
+    --cov-report=xml
+    --cov-report=term-missing
+    --cov-fail-under=50
+"""
+
+# For async tests (if needed)
+asyncio_mode = "auto"
+
+# =============================================================================
+# Mypy Configuration (REQUIRED)
+# =============================================================================
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Start lenient, tighten later
+
+# Add overrides for third-party packages without type stubs
+[[tool.mypy.overrides]]
+module = "gradio.*"
+ignore_missing_imports = true
+
+# =============================================================================
+# Bandit Security Configuration (REQUIRED)
+# =============================================================================
+[tool.bandit]
+exclude_dirs = ["tests", "docs", "_working"]
+skips = ["B101"]  # Skip assert_used check (assertions are fine in tests)
+
+# =============================================================================
+# Coverage Configuration (OPTIONAL - can also use .coveragerc)
+# =============================================================================
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]

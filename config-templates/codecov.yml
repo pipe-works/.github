@@ -1,0 +1,41 @@
+# Standard Codecov configuration for pipe-works organization
+# Copy this file to your repository root as `codecov.yml`
+# Customize the coverage targets as needed for your project
+
+coverage:
+  status:
+    project:
+      default:
+        target: 50%          # Adjust based on your project
+        threshold: 1%        # Allow 1% drop before failing
+        informational: false # Block merge if below threshold
+    patch:
+      default:
+        target: 70%          # New code should have higher coverage
+        threshold: 5%        # Allow 5% drop for new code
+        informational: false
+
+  precision: 2
+  round: down
+  range: "50...100"  # Color coding: 50% is yellow, 100% is bright green
+
+comment:
+  layout: "header, diff, flags, components"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+# Ignore paths (customize for your project)
+ignore:
+  - "tests/"
+  - "examples/"
+  - "docs/"
+  - "**/__pycache__"
+  - "**/*.egg-info"
+
+# UI-specific ignores (if applicable)
+# Uncomment and customize if you have Gradio/UI code
+# ignore:
+#   - "**/app.py"      # UI glue code
+#   - "**/handlers/*.py" # UI handlers
