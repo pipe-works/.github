@@ -24,6 +24,7 @@
 #       coverage-threshold: 50
 #       requires-models: true
 #       pytest-markers: 'not requires_model and not slow'
+#       docs-warning-threshold: 60  # Allow up to 60 warnings (for projects with known Sphinx issues)
 #     secrets: inherit
 
 name: Reusable Python CI
@@ -56,6 +57,11 @@ on:
         required: false
         type: boolean
         default: false
+      docs-warning-threshold:
+        description: 'Maximum documentation warnings allowed (0 = strict, no warnings allowed)'
+        required: false
+        type: number
+        default: 0
       test-os:
         description: 'Operating systems to test on (JSON array, e.g. ["ubuntu-latest", "macos-latest"])'
         required: false
@@ -253,6 +259,20 @@ jobs:
         cd docs
         make html
 
+    - name: Check for documentation warnings
+      if: ${{ inputs.docs-warning-threshold > 0 }}
+      run: |
+        cd docs
+        make html 2>&1 | tee build.log
+        # Count warnings
+        warning_count=$(grep -c "WARNING:" build.log || true)
+        echo "Documentation built with $warning_count warnings"
+        # Fail if more than threshold
+        if [ "$warning_count" -gt ${{ inputs.docs-warning-threshold }} ]; then
+          echo "Too many documentation warnings: $warning_count (threshold: ${{ inputs.docs-warning-threshold }})"
+          exit 1
+        fi
+
   # Package build validation
   build:
     name: Build Package
@@ -287,3 +307,42 @@ jobs:
         name: dist-packages-${{ matrix.os || 'ubuntu-latest' }}-py${{ matrix.python-version || inputs.python-version }}
         path: dist/
         retention-days: 7
+
+  # All checks passed (for branch protection)
+  all-checks-passed:
+    name: All Checks Passed
+    needs: [code-quality, test, security, docs, build]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Check all job statuses
+      run: |
+        # Check if all required jobs succeeded
+        if [ "${{ needs.code-quality.result }}" != "success" ]; then
+          echo "Code quality checks failed"
+          exit 1
+        fi
+
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "Tests failed"
+          exit 1
+        fi
+
+        if [ "${{ needs.build.result }}" != "success" ]; then
+          echo "Package build failed"
+          exit 1
+        fi
+
+        # Security and docs are optional - only check if they ran
+        if [ "${{ inputs.run-security }}" == "true" ] && [ "${{ needs.security.result }}" != "success" ]; then
+          echo "Security scan failed"
+          exit 1
+        fi
+
+        if [ "${{ inputs.run-docs }}" == "true" ] && [ "${{ needs.docs.result }}" != "success" ]; then
+          echo "Documentation build failed"
+          exit 1
+        fi
+
+        echo "✅ All checks passed successfully!"
