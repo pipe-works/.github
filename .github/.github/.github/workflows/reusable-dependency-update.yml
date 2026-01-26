@@ -1,0 +1,157 @@
+# Reusable Dependency Update Workflow for pipe-works organization
+# Automated dependency monitoring and issue creation
+#
+# Usage in your repo's .github/workflows/dependency-update.yml:
+#
+# name: Dependency Update
+#
+# on:
+#   schedule:
+#     - cron: '0 9 * * 1'  # Monday 9 AM UTC
+#   workflow_dispatch:
+#
+# jobs:
+#   update:
+#     uses: pipe-works/.github/.github/workflows/reusable-dependency-update.yml@main
+#     with:
+#       labels: 'dependencies,automated'
+#     secrets: inherit
+
+name: Reusable Dependency Update
+
+on:
+  workflow_call:
+    inputs:
+      labels:
+        description: 'Comma-separated labels for created issues'
+        required: false
+        type: string
+        default: 'dependencies,automated'
+      python-version:
+        description: 'Python version to use for checking'
+        required: false
+        type: string
+        default: '3.12'
+
+jobs:
+  check-dependencies:
+    name: Check Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install pip-tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-tools
+
+    - name: Install project dependencies
+      run: |
+        # Try to install dev dependencies if they exist
+        if [ -f "pyproject.toml" ]; then
+          pip install -e ".[dev]" 2>/dev/null || pip install -e . || true
+        elif [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt || true
+        fi
+
+    - name: Check for outdated packages
+      id: check
+      run: |
+        echo "Checking for outdated packages..."
+        pip list --outdated --format=json > outdated.json
+        cat outdated.json
+
+    - name: Create or update issue for outdated dependencies
+      if: success()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const outdated = JSON.parse(fs.readFileSync('outdated.json', 'utf8'));
+
+          if (outdated.length === 0) {
+            console.log('✅ All dependencies are up to date!');
+            return;
+          }
+
+          // Generate issue body
+          let body = '## Outdated Dependencies\n\n';
+          body += `Found ${outdated.length} package(s) with newer versions available:\n\n`;
+          body += '| Package | Current | Latest | Type |\n';
+          body += '|---------|---------|--------|------|\n';
+
+          outdated.forEach(pkg => {
+            body += `| ${pkg.name} | ${pkg.version} | ${pkg.latest_version} | ${pkg.latest_filetype || 'wheel'} |\n`;
+          });
+
+          body += '\n### Action Required\n\n';
+          body += 'Review these updates and consider:\n';
+          body += '1. Checking changelogs for breaking changes\n';
+          body += '2. Updating version constraints in `pyproject.toml` or `requirements.txt`\n';
+          body += '3. Running tests after updates\n';
+          body += '4. Creating a PR with the updates\n\n';
+
+          body += '### Update Commands\n\n';
+          body += '```bash\n';
+          body += '# Update specific package\n';
+          body += 'pip install --upgrade <package-name>\n\n';
+          body += '# Update all packages (use with caution)\n';
+          body += 'pip list --outdated --format=freeze | grep -v "^\\-e" | cut -d = -f 1 | xargs -n1 pip install -U\n';
+          body += '```\n\n';
+
+          body += '---\n';
+          body += `*This issue was automatically created by the Dependency Update workflow on ${new Date().toISOString().split('T')[0]}.*`;
+
+          // Parse labels
+          const labels = '${{ inputs.labels }}'.split(',').map(l => l.trim());
+
+          // Check if an open issue already exists
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: labels,
+            per_page: 100
+          });
+
+          const existingIssue = issues.find(issue =>
+            issue.title.startsWith('Outdated Dependencies')
+          );
+
+          if (existingIssue) {
+            // Update existing issue
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: existingIssue.number,
+              body: body
+            });
+
+            // Add comment to notify of update
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: existingIssue.number,
+              body: `🔄 Updated dependency check results on ${new Date().toISOString().split('T')[0]}`
+            });
+
+            console.log(`Updated existing issue #${existingIssue.number}`);
+          } else {
+            // Create new issue
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Outdated Dependencies - ${new Date().toISOString().split('T')[0]}`,
+              body: body,
+              labels: labels
+            });
+
+            console.log(`Created new issue #${issue.number}`);
+          }
