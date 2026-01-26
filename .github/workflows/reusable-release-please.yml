@@ -78,7 +78,7 @@ jobs:
       if: steps.release.outputs.pr != ''
       run: |
         echo "Release Please created/updated PR"
-        echo "PR: ${{ steps.release.outputs.pr }}"
+        echo "PR JSON output available in step outputs"
 
     - name: Release Created
       if: steps.release.outputs.release_created == 'true'
