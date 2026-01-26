@@ -307,11 +307,11 @@ When updating pinned versions (e.g., black):
 
 ### Repos Using These Standards
 
-- ✅ **pipeworks_name_generation** - Reference implementation
-- ⏳ **pipeworks-image-generator** - In progress
-- ⏳ **pipeworks_entity_state_generation** - Planned
-- ⏳ **pipeworks_mud_server** - Planned
-- ⏳ **pipe-works-org** - N/A (static HTML/CSS)
+- ✅ **pipeworks_name_generation** - Reference implementation (complete)
+- ✅ **pipeworks-image-generator** - Migrated (complete)
+- ✅ **pipeworks_entity_state_generation** - Migrated (complete)
+- ✅ **pipeworks_mud_server** - Migrated (complete)
+- ⏳ **pipe-works-org** - N/A (static HTML/CSS, no Python)
 
 ---
 
