@@ -23,6 +23,7 @@ This document defines the development standards, tooling, and best practices for
 **Required**: Python 3.12+
 
 All pipe-works projects target Python 3.12 as the minimum version. This allows us to use:
+
 - Modern type hints (`|` union syntax, `type` statement)
 - Performance improvements
 - Latest standard library features
@@ -38,6 +39,7 @@ All pipe-works projects target Python 3.12 as the minimum version. This allows u
 **Why pinned?** Black formatting can change between versions. Pinning ensures all developers and CI use the same formatting rules, preventing spurious diffs.
 
 **Configuration**:
+
 ```toml
 [tool.black]
 line-length = 100
@@ -45,6 +47,7 @@ target-version = ["py312"]
 ```
 
 **Usage**:
+
 ```bash
 black src/ tests/
 ```
@@ -56,6 +59,7 @@ black src/ tests/
 Ruff combines the functionality of flake8, isort, pylint, and more into one fast tool.
 
 **Configuration**:
+
 ```toml
 [tool.ruff]
 line-length = 100
@@ -66,6 +70,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 ```
 
 **Usage**:
+
 ```bash
 ruff check src/ tests/
 ruff check src/ --fix  # Auto-fix issues
@@ -76,6 +81,7 @@ ruff check src/ --fix  # Auto-fix issues
 **Version**: `>=1.19.0`
 
 **Configuration**:
+
 ```toml
 [tool.mypy]
 python_version = "3.12"
@@ -85,6 +91,7 @@ disallow_untyped_defs = false  # Start lenient
 ```
 
 **Usage**:
+
 ```bash
 mypy src/
 ```
@@ -96,6 +103,7 @@ mypy src/
 Scans code for common security issues.
 
 **Configuration**:
+
 ```toml
 [tool.bandit]
 exclude_dirs = ["tests", "docs", "_working"]
@@ -111,10 +119,12 @@ skips = ["B101"]
 **Version**: `>=8.0.0`
 
 **Required plugins**:
+
 - `pytest-cov>=4.1.0` - Coverage reporting
 - `pytest-asyncio>=0.23.0` - If using async code
 
 **Configuration**:
+
 ```toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -128,6 +138,7 @@ addopts = """
 ```
 
 **Coverage Targets**:
+
 - **Minimum**: 50% for overall project
 - **Goal**: 70%+ for new code
 - **Core logic**: 90%+ recommended
@@ -207,21 +218,25 @@ jobs:
 #### Local Development
 
 **Install test dependencies**:
+
 ```bash
 pip install -e ".[dev]"
 ```
 
 **Run fast tests only** (pre-commit):
+
 ```bash
 pytest -m "not requires_model and not slow"
 ```
 
 **Run all tests** (before PR):
+
 ```bash
 pytest  # Runs everything including model tests
 ```
 
 **Run specific marker**:
+
 ```bash
 pytest -m requires_model  # Only model tests
 pytest -m slow            # Only slow tests
@@ -304,6 +319,7 @@ coverage:
 For projects with UI code (Gradio, Flask, FastAPI) that's difficult to unit test, exclude it from coverage calculations:
 
 **In `pyproject.toml`**:
+
 ```toml
 [tool.coverage.run]
 omit = [
@@ -315,6 +331,7 @@ omit = [
 ```
 
 **In `codecov.yml`**:
+
 ```yaml
 ignore:
   - "src/*/client/app.py"
@@ -435,6 +452,7 @@ pre-commit install
 Copy from: `pipe-works/.github/config-templates/.pre-commit-config.yaml`
 
 **Included hooks**:
+
 - Ruff (linting)
 - Black (formatting) - **Version 26.1.0 pinned**
 - File checks (trailing whitespace, EOF, YAML, etc.)
@@ -456,6 +474,7 @@ pre-commit run --all-files
 ### Sphinx + ReadTheDocs
 
 **Recommended setup**:
+
 - Sphinx for API docs
 - sphinx-rtd-theme for styling
 - MyST parser for Markdown support
