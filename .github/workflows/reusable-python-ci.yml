@@ -190,6 +190,9 @@ jobs:
     name: Security Scan
     if: ${{ inputs.run-security }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
     - name: Checkout code
