@@ -263,6 +263,120 @@ ML dependencies (PyTorch, Diffusers) are large. Standard GitHub runners have ~14
 
 ---
 
+### Codecov Configuration
+
+All pipe-works repositories should have Codecov integration for coverage tracking and reporting.
+
+#### Setup Requirements
+
+1. **Add XML coverage report** to `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=your_package",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",  # Required for Codecov!
+    "--cov-fail-under=50",
+]
+```
+
+1. **Copy `codecov.yml`** from config-templates to your repository root:
+
+```bash
+cp ../pipe-works/.github/config-templates/codecov.yml ./codecov.yml
+```
+
+1. **Customize coverage targets** in `codecov.yml`:
+
+```yaml
+coverage:
+  status:
+    project:
+      default:
+        target: 50%  # Set to your project's target (50%, 70%, 80%)
+        threshold: 2%
+```
+
+#### Coverage Exclusions
+
+For projects with UI code (Gradio, Flask, FastAPI) that's difficult to unit test, exclude it from coverage calculations:
+
+**In `pyproject.toml`**:
+```toml
+[tool.coverage.run]
+omit = [
+    "*/tests/*",
+    "*/client/app.py",      # Gradio app entry point
+    "*/client/tabs/*",      # Gradio UI tabs
+    "*/api/server.py",      # API server entry point
+]
+```
+
+**In `codecov.yml`**:
+```yaml
+ignore:
+  - "src/*/client/app.py"
+  - "src/*/client/tabs/**"
+  - "src/*/api/server.py"
+```
+
+**Important**: Keep both configurations in sync to ensure local coverage calculations match Codecov behavior.
+
+#### Coverage Targets by Project Type
+
+Choose appropriate coverage targets based on your project:
+
+| Project Type            | Target  | Notes                                    |
+| ----------------------- | ------- | ---------------------------------------- |
+| Pure Python libraries   | 80%+    | High coverage is achievable              |
+| CLI tools               | 70-80%  | Some paths hard to test (exit handlers)  |
+| API servers (no UI)     | 80%+    | Mock external dependencies               |
+| API + UI (Gradio/web)   | 70-80%  | Exclude UI glue code                     |
+| ML/model projects       | 50-70%  | Exclude model code, test logic           |
+
+#### Coverage Best Practices
+
+1. **Test logic, not glue code**: UI handlers, app entry points, and server boilerplate are difficult to unit test. Focus coverage on business logic.
+
+2. **Separate testable from untestable code**:
+
+   ```text
+   src/your_package/
+   ├── core/           # Business logic (aim for 90%+ coverage)
+   │   ├── engine.py
+   │   └── logic.py
+   ├── api/            # API layer (aim for 80%+ coverage)
+   │   └── endpoints.py
+   └── client/         # UI code (may exclude from coverage)
+       └── app.py
+   ```
+
+3. **Monitor coverage trends**: Codecov shows coverage changes in PRs. New code should maintain or improve coverage.
+
+4. **Don't chase 100%**: Perfect coverage has diminishing returns. Focus on testing critical paths and edge cases.
+
+#### Troubleshooting
+
+**Codecov not updating?**
+
+1. Verify `--cov-report=xml` is in `pyproject.toml`
+2. Check CI logs for "Uploading coverage to Codecov"
+3. Ensure `CODECOV_TOKEN` secret is configured (org-level)
+4. Check if CI is failing due to coverage threshold
+
+**Coverage lower than expected?**
+
+1. Check if UI/glue code is included in calculations
+2. Add appropriate exclusions to `pyproject.toml` and `codecov.yml`
+3. Verify `omit` patterns match actual file paths
+4. Run `pytest --cov --cov-report=term-missing` locally to see uncovered lines
+
+**Example**: pipeworks_mud_server had 68% coverage initially because Gradio UI tabs had 0% coverage. After excluding UI code, effective coverage for testable code was 85-90%.
+
+---
+
 ## CI/CD
 
 ### Reusable Workflow
