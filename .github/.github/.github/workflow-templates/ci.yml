@@ -1,0 +1,38 @@
+# CI Workflow Template for pipe-works Python projects
+# Copy this file to your repository's .github/workflows/ directory
+#
+# Customize the following inputs for your project:
+# - python-versions: Python versions to test
+# - coverage-threshold: Minimum coverage percentage
+# - test-os: Operating systems to test on
+# - docs-warning-threshold: Max documentation warnings (0 = strict)
+# - requires-models: Enable if project uses ML models
+# - pytest-markers: Pytest marker expression for CI
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'release-please--*']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  ci:
+    uses: pipe-works/.github/.github/workflows/reusable-python-ci.yml@main
+    with:
+      python-version: '3.12'
+      python-versions: '["3.12", "3.13"]'
+      coverage-threshold: 50
+      run-security: true
+      run-docs: true
+      docs-warning-threshold: 0  # Strict by default
+      test-os: '["ubuntu-latest"]'  # Or ["ubuntu-latest", "macos-latest", "windows-latest"]
+      requires-models: false
+      # pytest-markers: 'not requires_model and not slow'  # Optional
+    secrets: inherit

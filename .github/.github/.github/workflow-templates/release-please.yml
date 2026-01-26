@@ -1,0 +1,26 @@
+# Release Please Workflow Template for pipe-works Python projects
+# Copy this file to your repository's .github/workflows/ directory
+#
+# Prerequisites:
+# 1. Copy release-please-config.json to repo root and update package-name
+# 2. Copy .release-please-manifest.json to repo root and set initial version
+# 3. Use conventional commits (feat:, fix:, docs:, etc.)
+#
+# Customize:
+# - package-name: Your package name (must match pyproject.toml)
+
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    uses: pipe-works/.github/.github/workflows/reusable-release-please.yml@main
+    with:
+      release-type: 'python'
+      package-name: 'YOUR-PACKAGE-NAME'  # ← CHANGE THIS
+      bump-minor-pre-major: true
+      bump-patch-for-minor-pre-major: true
+    secrets: inherit

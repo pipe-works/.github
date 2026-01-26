@@ -1,0 +1,25 @@
+# Dependency Update Workflow Template for pipe-works Python projects
+# Copy this file to your repository's .github/workflows/ directory
+#
+# This workflow runs weekly to check for outdated dependencies
+# and creates/updates a GitHub issue with the results.
+#
+# Customize:
+# - schedule: Cron schedule for checks (default: Monday 9 AM UTC)
+# - labels: Labels for created issues
+
+name: Dependency Update
+
+on:
+  schedule:
+    # Run weekly on Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  update:
+    uses: pipe-works/.github/.github/workflows/reusable-dependency-update.yml@main
+    with:
+      labels: 'dependencies,automated'
+      python-version: '3.12'
+    secrets: inherit
