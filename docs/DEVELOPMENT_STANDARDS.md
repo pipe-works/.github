@@ -436,6 +436,67 @@ The reusable workflow includes:
 
 - `CODECOV_TOKEN` - Organization-level secret for coverage reporting
 
+### Advanced CI Patterns
+
+For complex projects, you may need custom CI configurations beyond the reusable workflow.
+
+#### Multi-OS Testing
+
+**When to use**: Libraries that need cross-platform compatibility (CLI tools, system utilities)
+
+**Pattern** (from pipeworks_name_generation):
+
+```yaml
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.12', '3.13']
+    steps:
+      # ... test steps
+```
+
+**Note**: The reusable workflow currently only supports Ubuntu. For multi-OS testing, use a custom workflow like [pipeworks_name_generation/ci.yml](https://github.com/pipe-works/pipeworks_name_generation/blob/main/.github/workflows/ci.yml).
+
+#### Dependency Security Scanning
+
+Add Safety to check dependencies for known vulnerabilities:
+
+```yaml
+jobs:
+  security:
+    steps:
+      - name: Install safety
+        run: pip install safety
+      - name: Check dependencies
+        run: |
+          safety check --file=requirements.txt || true
+          safety check --file=requirements-dev.txt || true
+```
+
+Safety is also available as a pre-commit hook (see .pre-commit-config.yaml template).
+
+#### Custom Documentation Validation
+
+For projects with Sphinx documentation, you may want custom validation beyond "builds successfully":
+
+```yaml
+- name: Check for documentation warnings
+  run: |
+    cd docs
+    make html 2>&1 | tee build.log
+    warning_count=$(grep -c "WARNING:" build.log || true)
+    if [ "$warning_count" -gt 60 ]; then
+      echo "Too many documentation warnings"
+      exit 1
+    fi
+```
+
+**Reference**: See [pipeworks_name_generation/.github/workflows/ci.yml](https://github.com/pipe-works/pipeworks_name_generation/blob/main/.github/workflows/ci.yml) for a comprehensive 211-line custom CI setup with all advanced patterns.
+
 ---
 
 ## Pre-commit Hooks
@@ -451,15 +512,28 @@ pre-commit install
 
 Copy from: `pipe-works/.github/config-templates/.pre-commit-config.yaml`
 
-**Included hooks**:
+**Included hooks** (in order of execution):
 
-- Ruff (linting)
-- Black (formatting) - **Version 26.1.0 pinned**
-- File checks (trailing whitespace, EOF, YAML, etc.)
-- Mypy (type checking)
-- Bandit (security)
-- Markdownlint (markdown formatting)
-- Codespell (spell checking)
+1. **Ruff** - Fast Python linter (replaces flake8, isort, pylint)
+2. **Black** - Python code formatter - **Version 26.1.0 pinned org-wide**
+3. **File checks** (from pre-commit-hooks):
+   - trailing-whitespace, end-of-file-fixer, mixed-line-ending
+   - check-yaml, check-toml, check-json
+   - check-added-large-files (500KB limit)
+   - check-case-conflict, check-merge-conflict
+   - check-symlinks, destroyed-symlinks
+4. **Python checks**:
+   - check-ast, check-builtin-literals, check-docstring-first
+   - debug-statements, name-tests-test
+   - requirements-txt-fixer (sorts requirements files)
+5. **Safety** - Checks dependencies for known security vulnerabilities
+6. **Mypy** - Python type checking
+7. **Bandit** - Security scanning for common Python vulnerabilities
+8. **Markdownlint** - Markdown linting and auto-fix (with .markdownlintrc)
+9. **pretty-format-yaml** - YAML file formatter
+10. **Codespell** - Spell checking with custom ignore lists
+
+**Reference implementation**: See [pipeworks_name_generation/.pre-commit-config.yaml](https://github.com/pipe-works/pipeworks_name_generation/blob/main/.pre-commit-config.yaml) for the most comprehensive setup with custom hooks
 
 ### Running Manually
 

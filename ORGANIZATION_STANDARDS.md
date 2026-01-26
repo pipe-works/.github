@@ -22,6 +22,7 @@ Located in `.github/workflows/`:
 Located in `config-templates/`:
 
 - **`.pre-commit-config.yaml`** - Standard pre-commit hooks (black 26.1.0 pinned!)
+- **`.markdownlintrc`** - Markdown linting configuration
 - **`pyproject-standards.toml`** - Standard pyproject.toml sections
 - **`codecov.yml`** - Codecov configuration
 
@@ -41,6 +42,7 @@ Located in `config-templates/`:
    ```bash
    # From the pipe-works/.github repo
    cp config-templates/.pre-commit-config.yaml your-repo/
+   cp config-templates/.markdownlintrc your-repo/
    cp config-templates/codecov.yml your-repo/
    ```
 
@@ -169,15 +171,31 @@ jobs:
 **Features**:
 - Black 26.1.0 (pinned)
 - Ruff linting
-- File checks (EOF, trailing whitespace, YAML, TOML, JSON)
+- File checks (EOF, trailing whitespace, YAML, TOML, JSON, symlinks)
 - Python checks (AST, builtins, docstrings, debug statements)
+- Requirements.txt sorting (requirements-txt-fixer)
+- Safety dependency security scanning
 - Mypy type checking
 - Bandit security scanning
-- Markdownlint
+- Markdownlint with auto-fix
+- YAML formatting (pretty-format-yaml)
 - Codespell spell checking
 - Optional pytest hook
 
 **Copy from**: `config-templates/.pre-commit-config.yaml`
+
+### .markdownlintrc
+
+**Features**:
+
+- Enforces markdown best practices
+- 120 character line length (code blocks and tables excluded)
+- Allows inline HTML (MD033) for flexibility
+- Allows files without top-level heading (MD041)
+
+**Usage**: Works with markdownlint pre-commit hook (see .pre-commit-config.yaml)
+
+**Copy from**: `config-templates/.markdownlintrc`
 
 ### pyproject-standards.toml
 
