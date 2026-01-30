@@ -1,0 +1,6 @@
+{
+  "name": "Pipe-Works Compliance Check",
+  "description": "Checks repository compliance with pipe-works organization standards including required files, pre-commit configuration, and CI workflows.",
+  "iconName": "octicon shield-check",
+  "categories": ["Python", "CI"]
+}

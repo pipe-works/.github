@@ -1,0 +1,21 @@
+# Pipe-Works Organization Compliance Check
+# This workflow checks repository compliance with organization standards.
+# Add this to your repository's .github/workflows/ directory.
+
+name: Compliance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Run weekly to catch drift
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight
+
+jobs:
+  compliance:
+    name: Check Compliance
+    uses: pipe-works/.github/.github/workflows/compliance-check.yml@main
+    with:
+      strict: true

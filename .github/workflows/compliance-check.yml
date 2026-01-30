@@ -1,0 +1,82 @@
+# Reusable Compliance Check Workflow
+# This workflow can be called by other repositories to check compliance
+# with pipe-works organization standards.
+#
+# Usage in other repos:
+#   jobs:
+#     compliance:
+#       uses: pipe-works/.github/.github/workflows/compliance-check.yml@main
+
+name: Compliance Check
+
+on:
+  workflow_call:
+    inputs:
+      strict:
+        description: 'Fail if repository is non-compliant'
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      compliant:
+        description: 'Whether the repository is compliant'
+        value: ${{ jobs.check.outputs.compliant }}
+      score:
+        description: 'Compliance score percentage'
+        value: ${{ jobs.check.outputs.score }}
+
+jobs:
+  check:
+    name: Check Compliance
+    runs-on: ubuntu-latest
+    outputs:
+      compliant: ${{ steps.compliance.outputs.compliant }}
+      score: ${{ steps.compliance.outputs.score }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout compliance tools
+        uses: actions/checkout@v4
+        with:
+          repository: pipe-works/.github
+          path: .compliance-tools
+          sparse-checkout: tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run compliance check
+        id: compliance
+        run: |
+          # Run compliance checker and capture output
+          set +e
+          OUTPUT=$(python .compliance-tools/tools/compliance_checker.py --format json .)
+          EXIT_CODE=$?
+          set -e
+
+          # Parse JSON output for GitHub outputs
+          COMPLIANT=$(echo "$OUTPUT" | python -c "import sys, json; data = json.load(sys.stdin); print('true' if data['reports'][0]['summary']['is_compliant'] else 'false')")
+          SCORE=$(echo "$OUTPUT" | python -c "import sys, json; data = json.load(sys.stdin); print(data['reports'][0]['summary']['score_percent'])")
+
+          echo "compliant=$COMPLIANT" >> $GITHUB_OUTPUT
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+
+          # Print human-readable report
+          python .compliance-tools/tools/compliance_checker.py .
+
+          # Exit with appropriate code
+          if [ "${{ inputs.strict }}" = "true" ] && [ "$COMPLIANT" = "false" ]; then
+            echo "::error::Repository is not compliant with pipe-works organization standards"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf .compliance-tools
