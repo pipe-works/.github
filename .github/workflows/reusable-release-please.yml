@@ -120,12 +120,13 @@ jobs:
           console.log(`Head SHA: ${headSha}`);
 
           // Set pending status on the commit
+          // Context must match ruleset requirement: 'ci / All Checks Passed'
           await github.rest.repos.createCommitStatus({
             owner: context.repo.owner,
             repo: context.repo.repo,
             sha: headSha,
             state: 'pending',
-            context: 'All Checks Passed',
+            context: 'ci / All Checks Passed',
             description: 'CI workflow triggered, waiting for completion...'
           });
 
@@ -201,7 +202,7 @@ jobs:
                 repo: context.repo.repo,
                 sha: headSha,
                 state: state,
-                context: 'All Checks Passed',
+                context: 'ci / All Checks Passed',
                 description: description,
                 target_url: run.html_url
               });
@@ -219,7 +220,7 @@ jobs:
             repo: context.repo.repo,
             sha: headSha,
             state: 'error',
-            context: 'All Checks Passed',
+            context: 'ci / All Checks Passed',
             description: 'CI workflow timed out'
           });
 
