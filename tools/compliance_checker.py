@@ -73,17 +73,68 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 # =============================================================================
-# ORGANIZATION STANDARDS CONFIGURATION
+# PROJECT PROFILES
 # =============================================================================
 
-# Required files that must exist in every repository
-REQUIRED_FILES = [
-    "CLAUDE.md",
-    "LICENSE",
-    "README.md",
-    ".pre-commit-config.yaml",
-    ".gitignore",
-]
+# Profile types determine which checks apply to a repository
+# Profiles are auto-detected based on repository characteristics
+PROFILE_PYTHON = "python"  # Python projects (pyproject.toml, setup.py, etc.)
+PROFILE_STATIC_SITE = "static_site"  # HTML/CSS/JS websites (no Python)
+PROFILE_DOCUMENTATION = "documentation"  # Documentation-only repos
+PROFILE_ORG_CONFIG = "org_config"  # Organization config repos (.github)
+
+# Files that indicate each profile type
+PROFILE_INDICATORS = {
+    PROFILE_PYTHON: ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile"],
+    PROFILE_STATIC_SITE: ["index.html", "package.json"],
+    PROFILE_DOCUMENTATION: [],  # Detected by exclusion
+    PROFILE_ORG_CONFIG: [".github"],  # Special case: repo named .github
+}
+
+
+# =============================================================================
+# ORGANIZATION STANDARDS CONFIGURATION (Profile-based)
+# =============================================================================
+
+# Required files per profile
+REQUIRED_FILES_BY_PROFILE = {
+    PROFILE_PYTHON: ["CLAUDE.md", "LICENSE", "README.md", ".pre-commit-config.yaml", ".gitignore"],
+    PROFILE_STATIC_SITE: ["CLAUDE.md", "LICENSE", "README.md", ".gitignore"],
+    PROFILE_DOCUMENTATION: ["LICENSE", "README.md"],
+    PROFILE_ORG_CONFIG: ["LICENSE", "README.md"],
+}
+
+# CI workflow requirements per profile
+CI_REQUIRED_BY_PROFILE = {
+    PROFILE_PYTHON: True,
+    PROFILE_STATIC_SITE: False,  # Optional for static sites
+    PROFILE_DOCUMENTATION: False,
+    PROFILE_ORG_CONFIG: False,
+}
+
+# Pre-commit requirements per profile
+PRECOMMIT_REQUIRED_BY_PROFILE = {
+    PROFILE_PYTHON: True,
+    PROFILE_STATIC_SITE: False,  # Optional
+    PROFILE_DOCUMENTATION: False,
+    PROFILE_ORG_CONFIG: False,
+}
+
+# CLAUDE.md section requirements per profile
+CLAUDE_MD_SECTIONS_BY_PROFILE = {
+    PROFILE_PYTHON: [
+        ("Project Overview", r"(?i)#.*project.*overview|#.*overview"),
+        ("Common Commands", r"(?i)#.*common.*commands|#.*commands"),
+    ],
+    PROFILE_STATIC_SITE: [
+        ("Project Overview", r"(?i)#.*project.*overview|#.*overview"),
+    ],
+    PROFILE_DOCUMENTATION: [],
+    PROFILE_ORG_CONFIG: [],
+}
+
+# Legacy compatibility - used when no profile is specified
+REQUIRED_FILES = ["CLAUDE.md", "LICENSE", "README.md", ".pre-commit-config.yaml", ".gitignore"]
 
 # Required files for Python projects
 PYTHON_PROJECT_FILES = [
@@ -95,7 +146,7 @@ CI_WORKFLOW_FILES = [
     ".github/workflows/ci.yml",
 ]
 
-# Required pre-commit hooks with minimum versions
+# Required pre-commit hooks with minimum versions (for Python projects)
 # Format: {repo_url: {hook_id: min_version}}
 REQUIRED_PRECOMMIT_HOOKS = {
     "https://github.com/pre-commit/pre-commit-hooks": [
@@ -482,6 +533,7 @@ class RepoReport:
     repo_name: str
     checks: list[CheckResult] = field(default_factory=list)
     is_python_project: bool = False
+    profile: str = PROFILE_PYTHON  # Default to Python for backwards compatibility
 
     @property
     def passed_count(self) -> int:
@@ -515,6 +567,7 @@ class RepoReport:
         return {
             "repo_path": str(self.repo_path),
             "repo_name": self.repo_name,
+            "profile": self.profile,
             "is_python_project": self.is_python_project,
             "checks": [c.to_dict() for c in self.checks],
             "summary": {
@@ -532,11 +585,13 @@ class RepoReport:
 # =============================================================================
 
 
-def check_required_files(repo_path: Path) -> list[CheckResult]:
-    """Check that all required files exist."""
+def check_required_files(repo_path: Path, profile: str = PROFILE_PYTHON) -> list[CheckResult]:
+    """Check that all required files exist based on project profile."""
     results: list[CheckResult] = []
 
-    for filename in REQUIRED_FILES:
+    required_files = REQUIRED_FILES_BY_PROFILE.get(profile, REQUIRED_FILES)
+
+    for filename in required_files:
         file_path = repo_path / filename
         if file_path.exists():
             results.append(
@@ -850,8 +905,8 @@ def check_precommit_installed(repo_path: Path) -> list[CheckResult]:
     return results
 
 
-def check_claude_md_content(repo_path: Path) -> list[CheckResult]:
-    """Check CLAUDE.md for required sections."""
+def check_claude_md_content(repo_path: Path, profile: str = PROFILE_PYTHON) -> list[CheckResult]:
+    """Check CLAUDE.md for required sections based on project profile."""
     results: list[CheckResult] = []
     claude_md_path = repo_path / "CLAUDE.md"
 
@@ -859,14 +914,15 @@ def check_claude_md_content(repo_path: Path) -> list[CheckResult]:
         # Already checked in required files
         return results
 
+    # Get section requirements for this profile
+    recommended_sections = CLAUDE_MD_SECTIONS_BY_PROFILE.get(profile, [])
+
+    # If no sections required for this profile, skip check
+    if not recommended_sections:
+        return results
+
     try:
         content = claude_md_path.read_text()
-
-        # Check for recommended sections
-        recommended_sections = [
-            ("Project Overview", r"(?i)#.*project.*overview|#.*overview"),
-            ("Common Commands", r"(?i)#.*common.*commands|#.*commands"),
-        ]
 
         for section_name, pattern in recommended_sections:
             if re.search(pattern, content):
@@ -932,6 +988,42 @@ def _compare_versions(v1: str, v2: str) -> int:
 # =============================================================================
 
 
+def detect_profile(repo_path: Path) -> str:
+    """
+    Detect the project profile based on repository characteristics.
+
+    Profiles determine which compliance checks apply:
+    - org_config: Organization config repos (named .github)
+    - python: Python projects with pyproject.toml, setup.py, etc.
+    - static_site: HTML/CSS/JS websites
+    - documentation: Documentation-only repos (default fallback)
+
+    Args:
+        repo_path: Path to the repository root.
+
+    Returns:
+        Profile string (PROFILE_PYTHON, PROFILE_STATIC_SITE, etc.)
+    """
+    repo_name = repo_path.name
+
+    # Special case: .github organization config repo
+    if repo_name == ".github":
+        return PROFILE_ORG_CONFIG
+
+    # Check for Python project indicators
+    for indicator in PROFILE_INDICATORS[PROFILE_PYTHON]:
+        if (repo_path / indicator).exists():
+            return PROFILE_PYTHON
+
+    # Check for static site indicators (HTML/JS project)
+    for indicator in PROFILE_INDICATORS[PROFILE_STATIC_SITE]:
+        if (repo_path / indicator).exists():
+            return PROFILE_STATIC_SITE
+
+    # Default to documentation profile
+    return PROFILE_DOCUMENTATION
+
+
 def is_python_project(repo_path: Path) -> bool:
     """Determine if a repository is a Python project."""
     indicators = [
@@ -948,6 +1040,12 @@ def check_repository(repo_path: Path) -> RepoReport:
     """
     Run all compliance checks on a repository.
 
+    Checks are applied based on the detected project profile:
+    - org_config: Minimal checks for organization repos (.github)
+    - python: Full checks including CI, pre-commit, pyproject.toml
+    - static_site: Basic checks without Python-specific requirements
+    - documentation: Minimal checks (LICENSE, README only)
+
     Args:
         repo_path: Path to the repository root.
 
@@ -955,22 +1053,35 @@ def check_repository(repo_path: Path) -> RepoReport:
         RepoReport with all check results.
     """
     repo_path = repo_path.resolve()
+
+    # Detect project profile
+    profile = detect_profile(repo_path)
+
     report = RepoReport(
         repo_path=repo_path,
         repo_name=repo_path.name,
-        is_python_project=is_python_project(repo_path),
+        is_python_project=(profile == PROFILE_PYTHON),
+        profile=profile,
     )
 
-    # Run checks
-    report.checks.extend(check_required_files(repo_path))
+    # Run profile-appropriate checks
+    report.checks.extend(check_required_files(repo_path, profile))
     report.checks.extend(check_license(repo_path))
-    report.checks.extend(check_ci_workflows(repo_path))
-    report.checks.extend(check_precommit_config(repo_path))
-    report.checks.extend(check_precommit_installed(repo_path))
-    report.checks.extend(check_claude_md_content(repo_path))
+
+    # CI workflow check (only for profiles that require it)
+    if CI_REQUIRED_BY_PROFILE.get(profile, False):
+        report.checks.extend(check_ci_workflows(repo_path))
+
+    # Pre-commit checks (only for profiles that require it)
+    if PRECOMMIT_REQUIRED_BY_PROFILE.get(profile, False):
+        report.checks.extend(check_precommit_config(repo_path))
+        report.checks.extend(check_precommit_installed(repo_path))
+
+    # CLAUDE.md content check (sections based on profile)
+    report.checks.extend(check_claude_md_content(repo_path, profile))
 
     # Python-specific checks
-    if report.is_python_project:
+    if profile == PROFILE_PYTHON:
         report.checks.extend(check_python_project_files(repo_path))
 
     return report
@@ -1003,11 +1114,15 @@ def scan_directory(dir_path: Path) -> list[RepoReport]:
 
 def format_text_report(report: RepoReport) -> str:
     """Format a report as human-readable text."""
+    # Format profile name for display
+    profile_display = report.profile.replace("_", " ").title()
+
     lines = [
         "",
         "=" * 60,
         f"Repository: {report.repo_name}",
         f"Path: {report.repo_path}",
+        f"Profile: {profile_display}",
         "=" * 60,
         "",
     ]
