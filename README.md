@@ -209,6 +209,83 @@ All repositories in the `pipe-works` organization follow a unified set of develo
 
 To get started, please read the `CONTRIBUTING.md` file in the specific repository you are interested in. For organization-wide standards, issue templates, and reusable CI/CD workflows, we are centralizing our efforts in a dedicated [`.github` repository](https://github.com/pipe-works/.github)
 
+---
+
+## Organization Tooling
+
+The `.github` repository provides centralized tooling to help maintain consistency across all pipe-works repositories.
+
+### Compliance Checker
+
+The compliance checker (`tools/compliance_checker.py`) verifies that repositories meet pipe-works organization standards:
+
+```bash
+# Check a repository for compliance
+python tools/compliance_checker.py /path/to/repo
+
+# Check with JSON output (for CI)
+python tools/compliance_checker.py --format json /path/to/repo
+
+# Scan multiple repos in a directory
+python tools/compliance_checker.py --scan-dir /path/to/workspace
+
+# Strict mode - exit with error if non-compliant
+python tools/compliance_checker.py --strict /path/to/repo
+```
+
+**What it checks:**
+- Required files: `README.md`, `LICENSE`, `CLAUDE.md`, `.gitignore`
+- License is GPL-3.0-or-later
+- Pre-commit hooks are configured (`.pre-commit-config.yaml`)
+- CI workflows exist (`.github/workflows/`)
+- CLAUDE.md contains required sections (Project Overview, Common Commands, Architecture)
+
+### Bootstrapping New Repositories
+
+Use the `--init` flag to bootstrap a new repository with all required files:
+
+```bash
+# Initialize a new repo with pipe-works standards
+python tools/compliance_checker.py --init /path/to/new-repo
+
+# Creates:
+# - CLAUDE.md (template)
+# - LICENSE (GPL-3.0)
+# - README.md (template)
+# - .gitignore (Python-focused)
+# - .pre-commit-config.yaml (black, ruff, mypy)
+# - .github/workflows/ci.yml (pytest, ruff, mypy)
+```
+
+### Reusable Compliance Workflow
+
+Add automated compliance checking to any repository by creating `.github/workflows/compliance.yml`:
+
+```yaml
+name: Compliance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly check
+
+jobs:
+  compliance:
+    name: Check Compliance
+    uses: pipe-works/.github/.github/workflows/compliance-check.yml@main
+    with:
+      strict: true
+```
+
+The workflow outputs:
+- `compliant`: Whether the repository meets all standards (true/false)
+- `score`: Compliance score percentage
+
+---
+
 ## Documentation
 
 - **To Explore the Philosophy**: Visit [pipe-works.org](https://pipe-works.org)
