@@ -116,6 +116,7 @@ Every pipe-works repository should have:
 - [x] Mypy type checking (lenient initially)
 - [x] Pytest with >=50% coverage
 - [x] Pre-commit hooks installed
+- [x] Gitleaks configured in pre-commit + CI
 - [x] Codecov integration
 - [x] GPL-3.0 license
 
@@ -130,6 +131,7 @@ The `reusable-python-ci.yml` workflow provides:
 ✅ **Code Quality**: Ruff, Black, Mypy
 ✅ **Testing**: Pytest with coverage reporting
 ✅ **Security**: Bandit + Trivy vulnerability scanning
+✅ **Secret Scanning**: Gitleaks
 ✅ **Documentation**: Sphinx build validation (optional)
 ✅ **Package Build**: Validates package can be built and published
 ✅ **Multi-OS**: Support for Ubuntu, macOS, Windows (optional)
@@ -140,10 +142,12 @@ The `reusable-python-ci.yml` workflow provides:
 ```yaml
 with:
   python-version: '3.12'              # Primary Python version
-  additional-python-versions: '[]'    # e.g. '["3.13"]'
+  python-versions: '["3.12", "3.13"]'
   coverage-threshold: 50              # Minimum coverage %
   run-security: true                  # Run Bandit + Trivy
   run-docs: false                     # Build Sphinx docs
+  run-gitleaks: true                  # Secret scanning
+  coverage-on-matrix: false           # Fast matrix + dedicated coverage job
   test-os: '["ubuntu-latest"]'        # OS matrix
 ```
 
@@ -155,7 +159,7 @@ jobs:
     uses: pipe-works/.github/.github/workflows/reusable-python-ci.yml@main
     with:
       python-version: '3.12'
-      additional-python-versions: '["3.13"]'
+      python-versions: '["3.12", "3.13"]'
       test-os: '["ubuntu-latest", "macos-latest", "windows-latest"]'
       coverage-threshold: 70
       run-docs: true

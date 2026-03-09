@@ -7,7 +7,8 @@
 # - test-os: Operating systems to test on
 # - docs-warning-threshold: Max documentation warnings (0 = strict)
 # - requires-models: Enable if project uses ML models
-# - pytest-markers: Pytest marker expression for CI
+# - pytest-matrix-markers: Marker expression for matrix (fast) test runs
+# - pytest-coverage-markers: Marker expression for dedicated coverage run
 
 name: CI
 
@@ -34,5 +35,8 @@ jobs:
       docs-warning-threshold: 0  # Strict by default
       test-os: '["ubuntu-latest"]'  # Or ["ubuntu-latest", "macos-latest", "windows-latest"]
       requires-models: false
-      # pytest-markers: 'not requires_model and not slow'  # Optional
+      run-gitleaks: true
+      coverage-on-matrix: false  # Faster default: coverage runs once on primary Python
+      # pytest-matrix-markers: 'not requires_model and not slow'  # Optional
+      # pytest-coverage-markers: ''  # Optional; defaults to full suite
     secrets: inherit

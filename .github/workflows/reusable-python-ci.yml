@@ -23,7 +23,7 @@
 #       python-versions: '["3.12", "3.13"]'  # Optional: test multiple versions
 #       coverage-threshold: 50
 #       requires-models: true
-#       pytest-markers: 'not requires_model and not slow'
+#       pytest-matrix-markers: 'not requires_model and not slow'
 #       docs-warning-threshold: 60  # Allow up to 60 warnings (for projects with known Sphinx issues)
 #     secrets: inherit
 
@@ -82,6 +82,36 @@ on:
         required: false
         type: string
         default: ''
+      run-gitleaks:
+        description: 'Run gitleaks secret scanning'
+        required: false
+        type: boolean
+        default: true
+      coverage-on-matrix:
+        description: 'Run coverage on every matrix test job instead of a single dedicated coverage job'
+        required: false
+        type: boolean
+        default: false
+      pytest-matrix-markers:
+        description: 'Pytest marker expression for matrix test jobs (falls back to pytest-markers)'
+        required: false
+        type: string
+        default: ''
+      pytest-matrix-args:
+        description: 'Additional pytest args for matrix test jobs (falls back to pytest-args)'
+        required: false
+        type: string
+        default: ''
+      pytest-coverage-markers:
+        description: 'Pytest marker expression for dedicated coverage job (falls back to pytest-markers)'
+        required: false
+        type: string
+        default: ''
+      pytest-coverage-args:
+        description: 'Additional pytest args for dedicated coverage job (falls back to pytest-args)'
+        required: false
+        type: string
+        default: ''
     secrets:
       CODECOV_TOKEN:
         required: true
@@ -120,8 +150,8 @@ jobs:
         mypy src/ || true
       continue-on-error: true
 
-  # Test suite with coverage
-  test:
+  # Matrix test suite (fast signal across configured Python versions / OSes)
+  test-matrix:
     name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -164,27 +194,44 @@ jobs:
     - name: Run tests with pytest
       shell: bash
       run: |
-        # Build pytest command with optional markers and args
-        PYTEST_CMD="pytest -v --cov --cov-report=xml --cov-report=term --cov-fail-under=${{ inputs.coverage-threshold }}"
-
-        # Add marker expression if provided
-        if [ -n "${{ inputs.pytest-markers }}" ]; then
-          PYTEST_CMD="$PYTEST_CMD -m '${{ inputs.pytest-markers }}'"
+        # Matrix-specific markers/args fall back to global pytest-markers/pytest-args
+        MARKERS="${{ inputs.pytest-matrix-markers }}"
+        if [ -z "$MARKERS" ]; then
+          MARKERS="${{ inputs.pytest-markers }}"
         fi
 
-        # Add additional args if provided
-        if [ -n "${{ inputs.pytest-args }}" ]; then
-          PYTEST_CMD="$PYTEST_CMD ${{ inputs.pytest-args }}"
+        EXTRA_ARGS="${{ inputs.pytest-matrix-args }}"
+        if [ -z "$EXTRA_ARGS" ]; then
+          EXTRA_ARGS="${{ inputs.pytest-args }}"
         fi
 
-        eval $PYTEST_CMD
+        # Build pytest command
+        PYTEST_CMD="pytest -v"
+
+        if [ -n "$MARKERS" ]; then
+          PYTEST_CMD="$PYTEST_CMD -m '$MARKERS'"
+        fi
+
+        if [ -n "$EXTRA_ARGS" ]; then
+          PYTEST_CMD="$PYTEST_CMD $EXTRA_ARGS"
+        fi
+
+        # Coverage is usually collected once in a dedicated job for speed.
+        # Optionally allow full coverage on every matrix job for stricter parity.
+        if [ "${{ inputs.coverage-on-matrix }}" == "true" ]; then
+          PYTEST_CMD="$PYTEST_CMD --cov --cov-report=xml --cov-report=term --cov-fail-under=${{ inputs.coverage-threshold }}"
+        else
+          PYTEST_CMD="$PYTEST_CMD --no-cov"
+        fi
+
+        eval "$PYTEST_CMD"
       env:
         # Prevent accidental model downloads in ML projects
         PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models == true && '/tmp/models' || '/dev/null' }}
         HF_HUB_OFFLINE: ${{ inputs.requires-models == true && '1' || '0' }}
 
-    - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == inputs.python-version
+    - name: Upload coverage to Codecov (matrix mode)
+      if: inputs.coverage-on-matrix == true && matrix.os == 'ubuntu-latest' && matrix.python-version == inputs.python-version
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -192,6 +239,100 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  # Dedicated full-coverage run on the primary interpreter.
+  # This keeps CI comprehensive while avoiding repeated expensive coverage
+  # instrumentation on every matrix leg.
+  test-coverage:
+    name: Coverage (Python ${{ inputs.python-version }})
+    if: ${{ inputs.coverage-on-matrix == false }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Free up disk space (ML models)
+      if: ${{ inputs.requires-models == true }}
+      run: |
+        # Remove unnecessary software to free up ~10GB for ML model testing
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        # Use --no-cache-dir for ML projects to save disk space
+        if [ "${{ inputs.requires-models }}" == "true" ]; then
+          pip install --no-cache-dir -e ".[dev]"
+        else
+          pip install -e ".[dev]"
+        fi
+
+    - name: Run coverage suite with pytest
+      shell: bash
+      run: |
+        MARKERS="${{ inputs.pytest-coverage-markers }}"
+        if [ -z "$MARKERS" ]; then
+          MARKERS="${{ inputs.pytest-markers }}"
+        fi
+
+        EXTRA_ARGS="${{ inputs.pytest-coverage-args }}"
+        if [ -z "$EXTRA_ARGS" ]; then
+          EXTRA_ARGS="${{ inputs.pytest-args }}"
+        fi
+
+        PYTEST_CMD="pytest -v --cov --cov-report=xml --cov-report=term --cov-fail-under=${{ inputs.coverage-threshold }}"
+
+        if [ -n "$MARKERS" ]; then
+          PYTEST_CMD="$PYTEST_CMD -m '$MARKERS'"
+        fi
+
+        if [ -n "$EXTRA_ARGS" ]; then
+          PYTEST_CMD="$PYTEST_CMD $EXTRA_ARGS"
+        fi
+
+        eval "$PYTEST_CMD"
+      env:
+        # Prevent accidental model downloads in ML projects
+        PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models == true && '/tmp/models' || '/dev/null' }}
+        HF_HUB_OFFLINE: ${{ inputs.requires-models == true && '1' || '0' }}
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-coverage-job
+        fail_ci_if_error: false
+
+  # Secret scanning
+  gitleaks:
+    name: Secret Scan (Gitleaks)
+    if: ${{ inputs.run-gitleaks }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Run gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Security scanning
   security:
@@ -313,7 +454,7 @@ jobs:
   # All checks passed (for branch protection)
   all-checks-passed:
     name: All Checks Passed
-    needs: [code-quality, test, security, docs, build]
+    needs: [code-quality, test-matrix, test-coverage, gitleaks, security, docs, build]
     runs-on: ubuntu-latest
     if: always()
 
@@ -326,8 +467,18 @@ jobs:
           exit 1
         fi
 
-        if [ "${{ needs.test.result }}" != "success" ]; then
-          echo "Tests failed"
+        if [ "${{ needs.test-matrix.result }}" != "success" ]; then
+          echo "Matrix tests failed"
+          exit 1
+        fi
+
+        if [ "${{ inputs.coverage-on-matrix }}" == "false" ] && [ "${{ needs.test-coverage.result }}" != "success" ]; then
+          echo "Coverage job failed"
+          exit 1
+        fi
+
+        if [ "${{ inputs.run-gitleaks }}" == "true" ] && [ "${{ needs.gitleaks.result }}" != "success" ]; then
+          echo "Gitleaks scan failed"
           exit 1
         fi
 
