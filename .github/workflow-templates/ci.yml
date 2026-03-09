@@ -9,6 +9,7 @@
 # - requires-models: Enable if project uses ML models
 # - pytest-matrix-markers: Marker expression for matrix (fast) test runs
 # - pytest-coverage-markers: Marker expression for dedicated coverage run
+# - run-content-validation/content-paths/content-validation-command: Optional fast lane for content-only PRs
 
 name: CI
 
@@ -39,4 +40,10 @@ jobs:
       coverage-on-matrix: false  # Faster default: coverage runs once on primary Python
       # pytest-matrix-markers: 'not requires_model and not slow'  # Optional
       # pytest-coverage-markers: ''  # Optional; defaults to full suite
+      # run-content-validation: true  # Optional: enable fast content validator
+      # skip-full-ci-on-content-only-pr: true  # Optional: skip full CI when PR touches only content-paths
+      # content-paths: |  # Optional: newline-separated globs
+      #   docs/**
+      #   data/worlds/**
+      # content-validation-command: pytest --override-ini addopts= -q tests/test_content_validation.py
     secrets: inherit
