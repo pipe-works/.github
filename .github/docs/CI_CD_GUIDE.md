@@ -43,9 +43,11 @@ Comprehensive CI pipeline with code quality checks, testing, security scanning, 
 - **Multi-Version**: Test across Python versions (e.g., 3.12, 3.13)
 - **Multi-OS**: Test on ubuntu, macos, windows (configurable)
 - **Security**: Bandit static analysis + Trivy vulnerability scanning
+- **Secret Detection**: Gitleaks scan to block committed secrets
 - **Documentation**: Sphinx builds with warning thresholds
 - **Package Build**: Validates package with twine
 - **ML Support**: Disk cleanup and offline mode for model testing
+- **Speed Optimized Tests**: Fast matrix tests + one dedicated full coverage run
 - **All-Checks-Passed**: Single status check for branch protection
 
 #### Usage
@@ -76,6 +78,8 @@ jobs:
       docs-warning-threshold: 0
       test-os: '["ubuntu-latest"]'
       requires-models: false
+      run-gitleaks: true
+      coverage-on-matrix: false
     secrets: inherit
 ```
 
@@ -93,6 +97,12 @@ jobs:
 | `requires-models` | boolean | `false` | Enable ML model support |
 | `pytest-markers` | string | `''` | Pytest marker expression |
 | `pytest-args` | string | `''` | Additional pytest arguments |
+| `run-gitleaks` | boolean | `true` | Run gitleaks secret scan |
+| `coverage-on-matrix` | boolean | `false` | Run coverage on every matrix test leg instead of one dedicated coverage job |
+| `pytest-matrix-markers` | string | `''` | Matrix test marker expression (fallback: `pytest-markers`) |
+| `pytest-matrix-args` | string | `''` | Matrix test extra args (fallback: `pytest-args`) |
+| `pytest-coverage-markers` | string | `''` | Coverage job marker expression (fallback: `pytest-markers`) |
+| `pytest-coverage-args` | string | `''` | Coverage job extra args (fallback: `pytest-args`) |
 
 #### Examples
 
@@ -112,7 +122,20 @@ with:
   python-versions: '["3.12", "3.13"]'
   coverage-threshold: 50
   requires-models: true
-  pytest-markers: 'not requires_model and not slow'
+  pytest-matrix-markers: 'not requires_model and not slow'
+  coverage-on-matrix: false
+```
+
+**Large test suite optimization**:
+```yaml
+with:
+  python-version: '3.12'
+  python-versions: '["3.12", "3.13"]'
+  coverage-threshold: 80
+  run-gitleaks: true
+  coverage-on-matrix: false
+  pytest-matrix-markers: 'not integration and not slow'
+  pytest-coverage-markers: ''  # full suite once on primary interpreter
 ```
 
 **Multi-OS Project**:

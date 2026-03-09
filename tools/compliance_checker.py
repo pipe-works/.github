@@ -159,12 +159,14 @@ REQUIRED_PRECOMMIT_HOOKS = {
     "https://github.com/astral-sh/ruff-pre-commit": ["ruff"],
     "https://github.com/pre-commit/mirrors-mypy": ["mypy"],
     "https://github.com/PyCQA/bandit": ["bandit"],
+    "https://github.com/gitleaks/gitleaks": ["gitleaks"],
 }
 
 # Minimum versions for critical hooks (rev field in pre-commit config)
 MIN_HOOK_VERSIONS = {
     "https://github.com/psf/black": "24.0.0",
     "https://github.com/astral-sh/ruff-pre-commit": "v0.1.0",
+    "https://github.com/gitleaks/gitleaks": "v8.0.0",
 }
 
 # Expected license identifier
@@ -328,6 +330,12 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ['bandit[toml]']
+
+  # Secret scanning with gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
 
   # Spell checking
   - repo: https://github.com/codespell-project/codespell

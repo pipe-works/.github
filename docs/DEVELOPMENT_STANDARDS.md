@@ -110,6 +110,22 @@ exclude_dirs = ["tests", "docs", "_working"]
 skips = ["B101"]
 ```
 
+### Gitleaks (Secret Scanner)
+
+**Version**: `v8+` (via pre-commit and CI action)
+
+Scans source and git history for accidentally committed secrets (API keys,
+tokens, credentials).
+
+**Pre-commit hook**:
+
+```yaml
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.24.2
+  hooks:
+    - id: gitleaks
+```
+
 ---
 
 ## Testing Standards
@@ -204,7 +220,8 @@ jobs:
       python-version: '3.12'
       coverage-threshold: 50
       requires-models: true                           # Enable disk cleanup
-      pytest-markers: 'not requires_model and not slow'  # Skip expensive tests
+      coverage-on-matrix: false                       # Fast matrix + one coverage run
+      pytest-matrix-markers: 'not requires_model and not slow'  # Skip expensive matrix tests
     secrets: inherit
 ```
 
@@ -419,6 +436,8 @@ jobs:
       coverage-threshold: 50
       run-security: true
       run-docs: true  # Set to true if you have docs
+      run-gitleaks: true
+      coverage-on-matrix: false
     secrets: inherit
 ```
 
@@ -427,10 +446,12 @@ jobs:
 The reusable workflow includes:
 
 1. **Code Quality** - Ruff, Black, Mypy
-2. **Tests** - Pytest with coverage
-3. **Security** - Bandit, Trivy
-4. **Documentation** - Sphinx build (optional)
-5. **Package Build** - Validate package can be built
+2. **Matrix Tests (Fast)** - pytest across configured Python/OS matrix
+3. **Coverage Tests (Full)** - one full coverage run on primary Python
+4. **Secret Scan** - Gitleaks
+5. **Security** - Bandit, Trivy
+6. **Documentation** - Sphinx build (optional)
+7. **Package Build** - Validate package can be built
 
 ### Required Secrets
 
@@ -529,9 +550,10 @@ Copy from: `pipe-works/.github/config-templates/.pre-commit-config.yaml`
 5. **Safety** - Checks dependencies for known security vulnerabilities
 6. **Mypy** - Python type checking
 7. **Bandit** - Security scanning for common Python vulnerabilities
-8. **Markdownlint** - Markdown linting and auto-fix (with .markdownlintrc)
-9. **pretty-format-yaml** - YAML file formatter
-10. **Codespell** - Spell checking with custom ignore lists
+8. **Gitleaks** - Secret scanning for leaked credentials and tokens
+9. **Markdownlint** - Markdown linting and auto-fix (with .markdownlintrc)
+10. **pretty-format-yaml** - YAML file formatter
+11. **Codespell** - Spell checking with custom ignore lists
 
 **Reference implementation**: See [pipeworks_name_generation/.pre-commit-config.yaml](https://github.com/pipe-works/pipeworks_name_generation/blob/main/.pre-commit-config.yaml) for the most comprehensive setup with custom hooks
 

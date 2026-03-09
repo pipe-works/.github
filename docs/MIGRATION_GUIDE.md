@@ -87,6 +87,7 @@ Edit `.pre-commit-config.yaml` and:
 - Add project-specific mypy dependencies
 - Enable/disable optional hooks (codespell, pytest-check)
 - Adjust file exclusions if needed
+- Keep `gitleaks` enabled (mandatory org policy for secret scanning)
 
 ### 2.4 Update Pre-commit Hooks
 
@@ -154,6 +155,8 @@ jobs:
       coverage-threshold: 50  # Adjust for your project
       run-security: true
       run-docs: false  # Set to true if you have docs
+      run-gitleaks: true
+      coverage-on-matrix: false  # Faster default for multi-version projects
     secrets: inherit
 ```
 
@@ -164,6 +167,8 @@ Adjust these based on your project:
 - `python-version`: Usually '3.12'
 - `coverage-threshold`: Your minimum coverage (50, 70, 80, etc.)
 - `run-docs`: Set to `true` if you have Sphinx docs
+- `run-gitleaks`: Keep `true` (mandatory secret scanning gate)
+- `coverage-on-matrix`: Keep `false` for faster CI; set `true` only if you need full parity coverage per matrix leg
 - `test-os`: Add multi-OS testing if needed:
   ```yaml
   test-os: '["ubuntu-latest", "macos-latest", "windows-latest"]'
