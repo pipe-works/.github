@@ -104,6 +104,9 @@ jobs:
 | `pytest-matrix-args` | string | `''` | Matrix test extra args (fallback: `pytest-args`) |
 | `pytest-coverage-markers` | string | `''` | Coverage job marker expression (fallback: `pytest-markers`) |
 | `pytest-coverage-args` | string | `''` | Coverage job extra args (fallback: `pytest-args`) |
+| `run-supplemental-tests` | boolean | `false` | Run an additional non-coverage pytest job |
+| `pytest-supplemental-markers` | string | `''` | Marker expression for supplemental tests |
+| `pytest-supplemental-args` | string | `''` | Extra args for supplemental tests |
 | `run-content-validation` | boolean | `false` | Enable content-validation job |
 | `skip-full-ci-on-content-only-pr` | boolean | `false` | Skip full CI on pull requests where all changed files match `content-paths` |
 | `content-paths` | string | `''` | Newline-separated glob patterns treated as content files |
@@ -140,7 +143,9 @@ with:
   run-gitleaks: true
   coverage-on-matrix: false
   pytest-matrix-markers: 'not integration and not slow'
-  pytest-coverage-markers: ''  # full suite once on primary interpreter
+  pytest-coverage-markers: 'not slow'
+  run-supplemental-tests: true
+  pytest-supplemental-markers: 'slow'
 ```
 
 **Mixed repo content-only fast lane**:

@@ -125,6 +125,21 @@ on:
         required: false
         type: string
         default: ''
+      run-supplemental-tests:
+        description: 'Run an additional non-coverage pytest job (for example, slow/model suites)'
+        required: false
+        type: boolean
+        default: false
+      pytest-supplemental-markers:
+        description: 'Pytest marker expression for supplemental tests'
+        required: false
+        type: string
+        default: ''
+      pytest-supplemental-args:
+        description: 'Additional pytest args for supplemental tests'
+        required: false
+        type: string
+        default: ''
       run-content-validation:
         description: 'Enable fast content validation job'
         required: false
@@ -490,6 +505,62 @@ jobs:
         name: codecov-coverage-job
         fail_ci_if_error: false
 
+  # Optional supplemental test lane for suites intentionally excluded from
+  # matrix and/or coverage marker profiles (for example slow/model tests).
+  supplemental-tests:
+    name: Supplemental Tests (Python ${{ inputs.python-version }})
+    needs: [change-classification]
+    if: ${{ needs.change-classification.outputs.run_full_ci == 'true' && inputs.run-supplemental-tests == true && inputs.pytest-supplemental-markers != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Free up disk space (ML models)
+      if: ${{ inputs.requires-models == true }}
+      run: |
+        # Remove unnecessary software to free up ~10GB for ML model testing
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        if [ "${{ inputs.requires-models }}" == "true" ]; then
+          pip install --no-cache-dir -e ".[dev]"
+        else
+          pip install -e ".[dev]"
+        fi
+
+    - name: Run supplemental tests with pytest
+      shell: bash
+      run: |
+        MARKERS="${{ inputs.pytest-supplemental-markers }}"
+        EXTRA_ARGS="${{ inputs.pytest-supplemental-args }}"
+
+        PYTEST_CMD="pytest -v --no-cov -m '$MARKERS'"
+
+        if [ -n "$EXTRA_ARGS" ]; then
+          PYTEST_CMD="$PYTEST_CMD $EXTRA_ARGS"
+        fi
+
+        eval "$PYTEST_CMD"
+      env:
+        # Prevent accidental model downloads in ML projects
+        PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models == true && '/tmp/models' || '/dev/null' }}
+        HF_HUB_OFFLINE: ${{ inputs.requires-models == true && '1' || '0' }}
+
   # Secret scanning
   gitleaks:
     name: Secret Scan (Gitleaks)
@@ -634,7 +705,7 @@ jobs:
   # All checks passed (for branch protection)
   all-checks-passed:
     name: All Checks Passed
-    needs: [change-classification, content-validation, code-quality, test-matrix, test-coverage, gitleaks, security, docs, build]
+    needs: [change-classification, content-validation, code-quality, test-matrix, test-coverage, supplemental-tests, gitleaks, security, docs, build]
     runs-on: ubuntu-latest
     if: always()
 
@@ -666,6 +737,11 @@ jobs:
 
           if [ "${{ inputs.coverage-on-matrix }}" == "false" ] && [ "${{ needs.test-coverage.result }}" != "success" ]; then
             echo "Coverage job failed"
+            exit 1
+          fi
+
+          if [ "${{ inputs.run-supplemental-tests }}" == "true" ] && [ "${{ needs.supplemental-tests.result }}" != "success" ]; then
+            echo "Supplemental tests failed"
             exit 1
           fi
         fi
