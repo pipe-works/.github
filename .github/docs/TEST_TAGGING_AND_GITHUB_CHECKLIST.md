@@ -80,3 +80,25 @@ Before running `gh` commands, editing CI workflows, or changing test tags:
 - Use `docs:` for documentation-only contract clarifications.
 - Use `feat:` only for actual new user-facing capability.
 
+## Organization GitHub Tagging Policy (Conventional Commits)
+
+| Tag | Use when | How to format | Do not use for |
+|---|---|---|---|
+| `feat` | New user-facing capability | `feat(scope): summary` | Docs-only, refactors, test-only, CI-only changes |
+| `fix` | Bug fix or regression correction | `fix(scope): summary` | New features |
+| `perf` | Measurable performance improvement | `perf(scope): summary` | Functional feature work |
+| `refactor` | Internal restructuring with no behavior change | `refactor(scope): summary` | User-visible features/fixes |
+| `docs` | Docs/comment/docstring-only change | `docs(scope): summary` | Code behavior changes |
+| `test` | Test-only additions/updates | `test(scope): summary` | CI/workflow changes |
+| `ci` | GitHub Actions/workflow/check policy changes | `ci(scope): summary` | Runtime code or tests |
+| `build` | Build/dependency/packaging system changes | `build(scope): summary` | App logic changes |
+| `chore` | Maintenance/admin/non-functional housekeeping | `chore(scope): summary` | Features/fixes |
+| `style` | Formatting/presentation-only changes | `style(scope): summary` | Functional changes |
+| `revert` | Explicit revert of previous commit | `revert: summary` | Normal fixes |
+
+Practical rule:
+
+1. Choose the smallest truthful tag for the dominant change type.
+2. Split mixed work into separate commits when needed.
+3. Avoid `feat` inflation because release automation treats it as a stronger
+   signal.
