@@ -5,6 +5,7 @@ This guide explains the CI/CD workflows available to all pipe-works projects.
 ## Table of Contents
 
 - [Overview](#overview)
+- [Agent Foundation](#agent-foundation)
 - [Reusable Workflows](#reusable-workflows)
   - [Python CI](#python-ci)
   - [Release Please](#release-please)
@@ -25,6 +26,18 @@ The pipe-works organization uses centralized reusable workflows to maintain cons
 - **Maintainability**: Fix once, apply everywhere
 - **Best Practices**: Incorporates lessons from pipeworks_name_generation
 - **Automation**: Semantic versioning, changelogs, and releases
+
+---
+
+## Agent Foundation
+
+Before making GitHub, CI, or test-tagging changes, read:
+
+- [Agent Foundation Rules](./AGENT_FOUNDATION.md)
+- [Test Tagging and GitHub Checklist](./TEST_TAGGING_AND_GITHUB_CHECKLIST.md)
+
+These documents define non-negotiable CI guardrails, tagging semantics, and
+the mandatory GitHub preflight checklist used across repositories.
 
 ---
 
@@ -162,6 +175,21 @@ with:
     *.md
   content-validation-command: pytest --override-ini addopts= -q tests/test_content_validation.py
 ```
+
+**Weekly full sweep trigger (recommended for maintained code repos)**:
+```yaml
+on:
+  push:
+    branches: [main, develop, 'release-please--*']
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '17 5 * * 1'  # Weekly Monday full sweep (UTC)
+  workflow_dispatch:
+```
+
+Note: content-only skip logic applies to pull requests only. Scheduled runs
+execute full CI paths.
 
 **Multi-OS Project**:
 ```yaml
