@@ -4,10 +4,27 @@
 
 This repository contains the shared development standards, CI/CD workflows, and configuration templates for all pipe-works projects.
 
+## Document Precedence (Deconflicted)
+
+To avoid conflicting guidance, use this precedence order:
+
+1. **Agent behavior + GitHub/test-tagging rules (canonical):**
+   - `.github/docs/AGENT_FOUNDATION.md`
+   - `.github/docs/TEST_TAGGING_AND_GITHUB_CHECKLIST.md`
+2. **CI workflow contract and reusable workflow inputs (canonical):**
+   - `.github/docs/CI_CD_GUIDE.md`
+3. **This file (`ORGANIZATION_STANDARDS.md`)** is an overview/index.
+
+If guidance differs, follow the higher-precedence document and update the lower
+one in the same change.
+
 ## Contents
 
 ### 📋 Documentation
 
+- **[Agent Foundation Rules](./.github/docs/AGENT_FOUNDATION.md)** - Mandatory cross-repo agent baseline
+- **[Test Tagging and GitHub Checklist](./.github/docs/TEST_TAGGING_AND_GITHUB_CHECKLIST.md)** - Marker contract + GitHub preflight checklist
+- **[CI/CD Guide](./.github/docs/CI_CD_GUIDE.md)** - Reusable workflow contract and CI behavior
 - **[Development Standards](./docs/DEVELOPMENT_STANDARDS.md)** - Required tools, versions, and practices
 - **[Migration Guide](./docs/MIGRATION_GUIDE.md)** - Step-by-step guide for updating existing repos
 
