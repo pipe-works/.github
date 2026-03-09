@@ -26,6 +26,19 @@
 #       pytest-matrix-markers: 'not requires_model and not slow'
 #       docs-warning-threshold: 60  # Allow up to 60 warnings (for projects with known Sphinx issues)
 #     secrets: inherit
+#
+# Mixed/content project fast lane (content-only PRs):
+# jobs:
+#   ci:
+#     uses: pipe-works/.github/.github/workflows/reusable-python-ci.yml@main
+#     with:
+#       run-content-validation: true
+#       skip-full-ci-on-content-only-pr: true
+#       content-paths: |
+#         app/worlds/**
+#         docs/**
+#       content-validation-command: pytest --override-ini addopts= -q tests/test_content_validation.py
+#     secrets: inherit
 
 name: Reusable Python CI
 
@@ -112,14 +125,171 @@ on:
         required: false
         type: string
         default: ''
+      run-content-validation:
+        description: 'Enable fast content validation job'
+        required: false
+        type: boolean
+        default: false
+      skip-full-ci-on-content-only-pr:
+        description: 'Skip full CI jobs for pull requests where all changed files match content-paths'
+        required: false
+        type: boolean
+        default: false
+      content-paths:
+        description: 'Newline-separated glob patterns treated as content-only files'
+        required: false
+        type: string
+        default: ''
+      content-validation-command:
+        description: 'Command to run for content validation (for example: pytest --override-ini addopts= -q tests/test_content_validation.py)'
+        required: false
+        type: string
+        default: ''
     secrets:
       CODECOV_TOKEN:
         required: true
 
 jobs:
+  # Detect whether the change can use content-only fast validation.
+  change-classification:
+    name: Change Classification
+    runs-on: ubuntu-latest
+    outputs:
+      run_full_ci: ${{ steps.classify.outputs.run_full_ci }}
+      run_content_validation: ${{ steps.classify.outputs.run_content_validation }}
+      content_only: ${{ steps.classify.outputs.content_only }}
+      changed_count: ${{ steps.classify.outputs.changed_count }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Classify changed files
+      id: classify
+      shell: bash
+      env:
+        RUN_CONTENT_VALIDATION: ${{ inputs.run-content-validation }}
+        SKIP_FULL_CI_ON_CONTENT_ONLY_PR: ${{ inputs.skip-full-ci-on-content-only-pr }}
+        CONTENT_PATHS: ${{ inputs.content-paths }}
+      run: |
+        python - <<'PY'
+        import fnmatch
+        import json
+        import os
+        import subprocess
+        from pathlib import Path
+
+        event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+        event_payload = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+        run_content_validation = os.environ.get("RUN_CONTENT_VALIDATION", "false").lower() == "true"
+        skip_full_ci = os.environ.get("SKIP_FULL_CI_ON_CONTENT_ONLY_PR", "false").lower() == "true"
+        content_patterns = [
+            line.strip()
+            for line in os.environ.get("CONTENT_PATHS", "").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+        def git_changed_files() -> list[str]:
+            if event_name == "pull_request":
+                pr = event_payload.get("pull_request", {})
+                base_sha = pr.get("base", {}).get("sha")
+                head_sha = pr.get("head", {}).get("sha")
+                if base_sha and head_sha:
+                    cmd = ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"]
+                else:
+                    cmd = ["git", "diff", "--name-only", "HEAD~1...HEAD"]
+            elif event_name == "push":
+                before = event_payload.get("before")
+                after = event_payload.get("after")
+                if before and after and before != ("0" * 40):
+                    cmd = ["git", "diff", "--name-only", f"{before}...{after}"]
+                else:
+                    cmd = ["git", "ls-files"]
+            else:
+                cmd = ["git", "diff", "--name-only", "HEAD~1...HEAD"]
+
+            try:
+                output = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                return []
+            return [line.strip() for line in output.splitlines() if line.strip()]
+
+        changed_files = git_changed_files()
+
+        def is_content_file(path: str) -> bool:
+            return any(fnmatch.fnmatch(path, pattern) for pattern in content_patterns)
+
+        content_changed = bool(
+            changed_files and content_patterns and any(is_content_file(path) for path in changed_files)
+        )
+        content_only = bool(
+            changed_files and content_patterns and all(is_content_file(path) for path in changed_files)
+        )
+
+        run_full_ci = True
+        if run_content_validation and skip_full_ci and event_name == "pull_request" and content_only:
+            run_full_ci = False
+
+        run_content_job = bool(
+            run_content_validation
+            and event_name == "pull_request"
+            and content_changed
+            and bool(content_patterns)
+        )
+
+        # Safety fallback: never skip full CI unless content validation is actually runnable.
+        if not run_full_ci and not run_content_job:
+            run_full_ci = True
+
+        output_path = Path(os.environ["GITHUB_OUTPUT"])
+        with output_path.open("a", encoding="utf-8") as fh:
+            fh.write(f"run_full_ci={'true' if run_full_ci else 'false'}\n")
+            fh.write(f"run_content_validation={'true' if run_content_job else 'false'}\n")
+            fh.write(f"content_only={'true' if content_only else 'false'}\n")
+            fh.write(f"changed_count={len(changed_files)}\n")
+
+        print("Changed files:", len(changed_files))
+        for path in changed_files:
+            print(f" - {path}")
+        print(f"run_full_ci={run_full_ci}")
+        print(f"run_content_validation={run_content_job}")
+        PY
+
+  # Fast validation path for content/policy changes.
+  content-validation:
+    name: Content Validation
+    needs: [change-classification]
+    if: ${{ inputs.run-content-validation && inputs.content-validation-command != '' && needs.change-classification.outputs.run_content_validation == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Run content validation
+      shell: bash
+      run: |
+        set -euo pipefail
+        ${{ inputs.content-validation-command }}
+
   # Code quality checks (linting, formatting, type checking)
   code-quality:
     name: Code Quality
+    needs: [change-classification]
+    if: ${{ needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -153,6 +323,8 @@ jobs:
   # Matrix test suite (fast signal across configured Python versions / OSes)
   test-matrix:
     name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: [change-classification]
+    if: ${{ needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -245,7 +417,8 @@ jobs:
   # instrumentation on every matrix leg.
   test-coverage:
     name: Coverage (Python ${{ inputs.python-version }})
-    if: ${{ inputs.coverage-on-matrix == false }}
+    needs: [change-classification]
+    if: ${{ inputs.coverage-on-matrix == false && needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -320,6 +493,7 @@ jobs:
   # Secret scanning
   gitleaks:
     name: Secret Scan (Gitleaks)
+    needs: [change-classification]
     if: ${{ inputs.run-gitleaks }}
     runs-on: ubuntu-latest
 
@@ -339,7 +513,8 @@ jobs:
   # Security scanning
   security:
     name: Security Scan
-    if: ${{ inputs.run-security }}
+    needs: [change-classification]
+    if: ${{ inputs.run-security && needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -381,7 +556,8 @@ jobs:
   # Documentation build (if enabled)
   docs:
     name: Documentation Build
-    if: ${{ inputs.run-docs }}
+    needs: [change-classification]
+    if: ${{ inputs.run-docs && needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -421,6 +597,8 @@ jobs:
   # Package build validation
   build:
     name: Build Package
+    needs: [change-classification]
+    if: ${{ needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -456,27 +634,40 @@ jobs:
   # All checks passed (for branch protection)
   all-checks-passed:
     name: All Checks Passed
-    needs: [code-quality, test-matrix, test-coverage, gitleaks, security, docs, build]
+    needs: [change-classification, content-validation, code-quality, test-matrix, test-coverage, gitleaks, security, docs, build]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
     - name: Check all job statuses
       run: |
+        RUN_FULL_CI="${{ needs.change-classification.outputs.run_full_ci }}"
+        RUN_CONTENT_VALIDATION="${{ needs.change-classification.outputs.run_content_validation }}"
+
+        echo "run_full_ci: $RUN_FULL_CI"
+        echo "run_content_validation: $RUN_CONTENT_VALIDATION"
+
+        if [ "$RUN_CONTENT_VALIDATION" == "true" ] && [ "${{ needs.content-validation.result }}" != "success" ]; then
+          echo "Content validation failed"
+          exit 1
+        fi
+
         # Check if all required jobs succeeded
-        if [ "${{ needs.code-quality.result }}" != "success" ]; then
-          echo "Code quality checks failed"
-          exit 1
-        fi
+        if [ "$RUN_FULL_CI" == "true" ]; then
+          if [ "${{ needs.code-quality.result }}" != "success" ]; then
+            echo "Code quality checks failed"
+            exit 1
+          fi
 
-        if [ "${{ needs.test-matrix.result }}" != "success" ]; then
-          echo "Matrix tests failed"
-          exit 1
-        fi
+          if [ "${{ needs.test-matrix.result }}" != "success" ]; then
+            echo "Matrix tests failed"
+            exit 1
+          fi
 
-        if [ "${{ inputs.coverage-on-matrix }}" == "false" ] && [ "${{ needs.test-coverage.result }}" != "success" ]; then
-          echo "Coverage job failed"
-          exit 1
+          if [ "${{ inputs.coverage-on-matrix }}" == "false" ] && [ "${{ needs.test-coverage.result }}" != "success" ]; then
+            echo "Coverage job failed"
+            exit 1
+          fi
         fi
 
         if [ "${{ inputs.run-gitleaks }}" == "true" ] && [ "${{ needs.gitleaks.result }}" != "success" ]; then
@@ -484,18 +675,18 @@ jobs:
           exit 1
         fi
 
-        if [ "${{ needs.build.result }}" != "success" ]; then
+        if [ "$RUN_FULL_CI" == "true" ] && [ "${{ needs.build.result }}" != "success" ]; then
           echo "Package build failed"
           exit 1
         fi
 
         # Security and docs are optional - only check if they ran
-        if [ "${{ inputs.run-security }}" == "true" ] && [ "${{ needs.security.result }}" != "success" ]; then
+        if [ "$RUN_FULL_CI" == "true" ] && [ "${{ inputs.run-security }}" == "true" ] && [ "${{ needs.security.result }}" != "success" ]; then
           echo "Security scan failed"
           exit 1
         fi
 
-        if [ "${{ inputs.run-docs }}" == "true" ] && [ "${{ needs.docs.result }}" != "success" ]; then
+        if [ "$RUN_FULL_CI" == "true" ] && [ "${{ inputs.run-docs }}" == "true" ] && [ "${{ needs.docs.result }}" != "success" ]; then
           echo "Documentation build failed"
           exit 1
         fi

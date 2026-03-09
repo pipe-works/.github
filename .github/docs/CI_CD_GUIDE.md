@@ -48,6 +48,7 @@ Comprehensive CI pipeline with code quality checks, testing, security scanning, 
 - **Package Build**: Validates package with twine
 - **ML Support**: Disk cleanup and offline mode for model testing
 - **Speed Optimized Tests**: Fast matrix tests + one dedicated full coverage run
+- **Content Fast Lane**: Optional content-only validation path for mixed repos
 - **All-Checks-Passed**: Single status check for branch protection
 
 #### Usage
@@ -103,6 +104,10 @@ jobs:
 | `pytest-matrix-args` | string | `''` | Matrix test extra args (fallback: `pytest-args`) |
 | `pytest-coverage-markers` | string | `''` | Coverage job marker expression (fallback: `pytest-markers`) |
 | `pytest-coverage-args` | string | `''` | Coverage job extra args (fallback: `pytest-args`) |
+| `run-content-validation` | boolean | `false` | Enable content-validation job |
+| `skip-full-ci-on-content-only-pr` | boolean | `false` | Skip full CI on pull requests where all changed files match `content-paths` |
+| `content-paths` | string | `''` | Newline-separated glob patterns treated as content files |
+| `content-validation-command` | string | `''` | Command run by the content-validation job |
 
 #### Examples
 
@@ -136,6 +141,21 @@ with:
   coverage-on-matrix: false
   pytest-matrix-markers: 'not integration and not slow'
   pytest-coverage-markers: ''  # full suite once on primary interpreter
+```
+
+**Mixed repo content-only fast lane**:
+```yaml
+with:
+  python-version: '3.12'
+  run-gitleaks: true
+  run-content-validation: true
+  skip-full-ci-on-content-only-pr: true
+  content-paths: |
+    app/worlds/**
+    data/worlds/**
+    docs/**
+    *.md
+  content-validation-command: pytest --override-ini addopts= -q tests/test_content_validation.py
 ```
 
 **Multi-OS Project**:
