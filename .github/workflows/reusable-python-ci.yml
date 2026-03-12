@@ -438,6 +438,8 @@ jobs:
     needs: [change-classification]
     if: ${{ inputs.coverage-on-matrix == false && needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
     - name: Checkout code
@@ -590,6 +592,8 @@ jobs:
     needs: [change-classification]
     if: ${{ inputs.run-security && needs.change-classification.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
     - name: Checkout code
