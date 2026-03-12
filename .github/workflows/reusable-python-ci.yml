@@ -419,15 +419,22 @@ jobs:
         PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models == true && '/tmp/models' || '/dev/null' }}
         HF_HUB_OFFLINE: ${{ inputs.requires-models == true && '1' || '0' }}
 
+    - name: Install Codecov CLI (matrix mode)
+      if: inputs.coverage-on-matrix == true && matrix.os == 'ubuntu-latest' && matrix.python-version == inputs.python-version
+      run: |
+        python -m pip install --upgrade codecov-cli
+
     - name: Upload coverage to Codecov (matrix mode)
       if: inputs.coverage-on-matrix == true && matrix.os == 'ubuntu-latest' && matrix.python-version == inputs.python-version
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      run: |
+        codecovcli upload-process \
+          --disable-search \
+          --file ./coverage.xml \
+          --flag unittests \
+          --name codecov-umbrella \
+          || true
 
   # Dedicated full-coverage run on the primary interpreter.
   # This keeps CI comprehensive while avoiding repeated expensive coverage
@@ -500,14 +507,20 @@ jobs:
         PIPEWORKS_MODELS_DIR: ${{ inputs.requires-models == true && '/tmp/models' || '/dev/null' }}
         HF_HUB_OFFLINE: ${{ inputs.requires-models == true && '1' || '0' }}
 
+    - name: Install Codecov CLI
+      run: |
+        python -m pip install --upgrade codecov-cli
+
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage.xml
-        flags: unittests
-        name: codecov-coverage-job
-        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      run: |
+        codecovcli upload-process \
+          --disable-search \
+          --file ./coverage.xml \
+          --flag unittests \
+          --name codecov-coverage-job \
+          || true
 
   # Optional supplemental test lane for suites intentionally excluded from
   # matrix and/or coverage marker profiles (for example slow/model tests).
@@ -615,12 +628,15 @@ jobs:
       continue-on-error: true
 
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+      run: |
+        docker run --rm \
+          -v "$PWD:/workspace" \
+          -w /workspace \
+          aquasec/trivy:0.63.0 \
+          fs \
+          --format sarif \
+          --output trivy-results.sarif \
+          .
       continue-on-error: true
 
     - name: Upload Trivy results to GitHub Security tab
