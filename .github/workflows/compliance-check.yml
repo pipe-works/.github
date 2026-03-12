@@ -35,17 +35,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout compliance tools
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: pipe-works/.github
           path: .compliance-tools
           sparse-checkout: tools
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
