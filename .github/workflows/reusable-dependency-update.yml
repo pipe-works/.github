@@ -33,6 +33,11 @@ on:
         type: string
         default: '3.12'
 
+env:
+  # Opt JavaScript actions in this workflow into the Node 24 runtime ahead of
+  # GitHub-hosted runner default transitions.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   check-dependencies:
     name: Check Dependencies
